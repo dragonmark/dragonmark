@@ -5,10 +5,13 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]]
 
-:jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
+  :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
+  
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
   :dependencies [[org.clojure/clojure "1.6.0-alpha1"]]
+
+  :hooks [cljx.hooks]
 
   :cljx {:builds [{:source-paths ["src/cljx"]
                    :output-path "target/classes"
