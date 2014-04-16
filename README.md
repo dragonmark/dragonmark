@@ -31,6 +31,13 @@ Yes, it's a simplification and in reality, we'd want a timeout
 waiting for the answer, etc. But the timeout is no different
 in the local address space and in a distributed environment.
 
+Both Clojure and ClojureScript are first-class citizens in Dragonmark.
+The build system will use [cljx](https://github.com/lynaghk/cljx) and
+the code will as much as possible be unified. This means that
+remote systems in the browser, on a JVM-based server, or a NodeJS-based
+server will all share the same semantics and substantially the same
+APIs.
+
 And Dragonmark will also be [JRuby](http://jruby.org/) friendly.
 
 ## Pieces
