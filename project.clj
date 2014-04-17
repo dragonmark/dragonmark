@@ -3,13 +3,13 @@
   :url "http://dragonmark.org"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.5.1"]]
+  :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
 
   :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
   
   :source-paths ["src/cljx"]
   :test-paths ["target/test-classes"]
-  :dependencies [[org.clojure/clojure "1.6.0-alpha1"]]
 
   :hooks [cljx.hooks]
 
@@ -41,4 +41,8 @@
                    :aliases {"cleantest" ["do" "clean," "cljx" "once," "test,"
                                           "cljsbuild" "test"]
                              "deploy" ["do" "clean," "cljx" "once," "deploy" "clojars"]}}}
+
+  :repositories {"sonatype-oss-public"
+                 "https://oss.sonatype.org/content/repositories/snapshots/"}
+
 )
