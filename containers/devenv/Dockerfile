@@ -11,7 +11,7 @@ ENV LANG en_US.UTF-8
 
 # Use squid deb proxy if the USE_SQUID shell variable is set. 
 # See https://gist.github.com/dergachev/8441335
-RUN if [ $USE_SQUID ] ; then /sbin/ip route | awk '/default/ { print "Acquire::http::Proxy \"http://"$3":8000\";" }' > /etc/apt/apt.conf.d/30proxy ; fi
+# RUN if [ $USE_SQUID ] ; then /sbin/ip route | awk '/default/ { print "Acquire::http::Proxy \"http://"$3":8000\";" }' > /etc/apt/apt.conf.d/30proxy ; fi
 RUN /sbin/ip route | awk '/default/ { print "Acquire::http::Proxy \"http://"$3":8000\";" }' > /etc/apt/apt.conf.d/30proxy 
 
 # Make sure the repo is up to date
@@ -28,6 +28,10 @@ RUN apt-get install -y byobu screen
 
 # Upgrade to the latest
 RUN apt-get upgrade -y
+
+# Alias nodejs to node
+
+RUN ln -s /usr/bin/nodejs /usr/bin/node
 
 # Add the dragon user
 RUN useradd -s /bin/bash -m dragon

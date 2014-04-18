@@ -51,6 +51,39 @@ The pieces of Dragonmark include:
 * Integration with JRuby
 * Docker containers for development and for testing across "machines"
 
+## Playing with the code
+
+I'm taking a different approach to setup with Dragonmark...
+using [Docker](http://docker.io).
+
+Why?
+
+Because it's easier to have a pre-configured container to
+do development rather than installing RabbitMQ, NodeJS, and
+whatever else.
+
+To get started, install Docker 0.9 or 0.10 on your system and
+then `cd dragonmarker/containers` and type `./run-dev.sh`.
+
+The first time you run the command, most of the Internet will
+be downloaded and an Ubuntu 13.10 container is built with Emacs,
+Vim, OpenJDK 7, git, and a few other things installed.
+
+After the container is built, you get a [byobu](http://byobu.co/)
+prompt. You can do `lein cleantest` to see the code compiled and
+tested. You can do `headless-repl` and get a headless repl bound
+to the IP address of the container and port 7888. This allows
+you to jack in via Cider or some other client to nRepl.
+
+If you're in the headless repl, you can press `F2` and get a new
+bash prompt and use `F3` to toggle between prompts.
+
+The container alises 3 directories into the container. It
+aliases your `~/.ssh` directory (read-only) so you've got
+access to your SSH keys. It aliases `~/.m2` to the container
+so you don't have to repopulate the Maven cache.
+Finally, the Draognmark directory is aliased to `~/dragonmark`
+in the container.
 
 ## Who
 

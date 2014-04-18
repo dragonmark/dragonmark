@@ -4,6 +4,8 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.1"]
+                 [org.clojure/clojurescript "0.0-2202"]
+                 
                  [org.clojure/core.async "0.1.278.0-76b25b-alpha"]]
 
   :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
@@ -35,9 +37,10 @@
                                    :optimizations :advanced
                                    :pretty-print true}}]}
 
-  :profiles {:dev {:plugins [[org.clojure/clojurescript "0.0-2156"]
+  :profiles {:dev {:plugins [[org.clojure/clojurescript "0.0-2202"]
+                             [com.cemerick/clojurescript.test "0.3.0"]
                              [com.keminglabs/cljx "0.3.2"]
-                             [lein-cljsbuild "1.0.1"]]
+                             [lein-cljsbuild "1.0.3"]]
                    :aliases {"cleantest" ["do" "clean," "cljx" "once," "test,"
                                           "cljsbuild" "test"]
                              "deploy" ["do" "clean," "cljx" "once," "deploy" "clojars"]}}}
