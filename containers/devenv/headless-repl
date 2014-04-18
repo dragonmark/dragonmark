@@ -1,0 +1,10 @@
+#!/bin/sh
+
+my_ip=$(ifconfig eth0 | grep -o "inet addr:[^ ]*" | head -1 | grep -o "[^:]*$")
+
+echo "Starting the headless REPL server."
+echo "Access by jacking into ${my_ip}:7888"
+
+echo "For a new shell, press F2"
+
+lein repl :headless :host ${my_ip} :port 7888
