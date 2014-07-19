@@ -2,7 +2,7 @@
 # This has everything to do develoment and testing for Dragonmark
 # including RabbitMQ and Node for testing
 
-FROM ubuntu:13.10
+FROM ubuntu:14.04
 
 MAINTAINER David Pollak, @dpp
 
@@ -11,11 +11,10 @@ ENV LANG en_US.UTF-8
 
 # Use squid deb proxy if the USE_SQUID shell variable is set. 
 # See https://gist.github.com/dergachev/8441335
-# RUN if [ $USE_SQUID ] ; then /sbin/ip route | awk '/default/ { print "Acquire::http::Proxy \"http://"$3":8000\";" }' > /etc/apt/apt.conf.d/30proxy ; fi
 RUN /sbin/ip route | awk '/default/ { print "Acquire::http::Proxy \"http://"$3":8000\";" }' > /etc/apt/apt.conf.d/30proxy 
 
 # Make sure the repo is up to date
-# RUN echo "deb http://archive.ubuntu.com/ubuntu saucy main universe" > /etc/apt/sources.list
+# RUN echo "deb http://archive.ubuntu.com/ubuntu trusty main universe" > /etc/apt/sources.list
 
 # Update package defs.
 RUN apt-get update
