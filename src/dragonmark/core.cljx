@@ -91,6 +91,19 @@ send to the answer channel or :dragonmark.core:i_got_it"
      ))
     c))
 
+(defn- index-of
+  "find the integer into of the value in the collection"
+  [coll value]
+  #+clj (.indexOf coll value)
+  #+cljs (loop [pos 0 coll coll]
+           (if (empty? coll) -1
+               (let [i (first coll)
+                     r (rest coll)]
+                 (cond
+                  (= i value) pos
+                  :else (recur (+ 1 pos) r)))))
+  )
+
 (defn go-parallel
   "Run a bunch of go routines in parallel. params is a sequence of {:chan :msg}.
 For each param, a return channel is created and sent with the messages. When
@@ -117,7 +130,7 @@ to the result-chan"
              ]
          (if (nil? value)
            (close-and-send {:error "timeout"})
-           (let [pos (.indexOf alt-on chan)
+           (let [pos (index-of alt-on chan)
                  ret (assoc ret (- pos 1) value)
                  cnt (+ 1 cnt)]
              (if (= len cnt) 
@@ -161,16 +174,16 @@ to the result-chan"
                   (if (= :timeout (-> pairs last first))
                     [(-> pairs last second) (butlast pairs)]
                     [30000 pairs])]
-              `(let [chan# (chan)]
+              `(let [chan# (~'chan)]
                  (go-parallel 
                   ~(mapv (fn [[_ [cmd chan params]]] 
                            `{:chan ~chan 
                              :msg (with-meta (assoc ~params :_cmd ~(name cmd)) {:local true})
                              }) pairs) 
                   ~timeout chan#)
-                 (go
-                  (let [res# (async/<! chan#)]
-                    (async/close! chan#)
+                 (~'go
+                  (let [res# (~'<! chan#)]
+                    (~'close! chan#)
                     (if (vector? res#)
                       (let [answers# (partition 2 (interleave '[~@(map first pairs)] res#))
                             errors# (filter #(-> % second :error) answers#)]
