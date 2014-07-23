@@ -199,9 +199,9 @@ to the result-chan"
 
       
       
-(gofor 
- [root (get-service @env-root {:service 'root})]
- [added (add root {:service 'wombat2 :channel (chan) :public true})]
- [b (list root)]
- :let [a (+ 1 1)]
- (println "dog: " a " and " b " root " root " added " added) :error (println "Got an error " &err " for frogs " &var))
+;; (gofor 
+;;  [root (get-service @env-root {:service 'root})]
+;;  [added (add root {:service 'wombat2 :channel (chan) :public true})]
+;;  [b (list root)]
+;;  :let [a (+ 1 1)]
+;;  (println "dog: " a " and " b " root " root " added " added) :error (println "Got an error " &err " for frogs " &var))
