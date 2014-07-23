@@ -13,6 +13,12 @@ way, a developer using CSP should not have to code differently
 (other than making sure all data structures are serializable)
 to write a local or distributed app.
 
+## Basic info
+
+![Build Status][https://travis-ci.org/dragonmark/dragonmark.svg?branch=develop]
+
+## More
+
 Dragonmark provides distributed CSP without bothering the developer
 with the specifics of the location of the channel. How?
 
