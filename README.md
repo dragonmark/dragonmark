@@ -15,7 +15,7 @@ to write a local or distributed app.
 
 ## Basic info
 
-![Build Status][https://travis-ci.org/dragonmark/dragonmark.svg?branch=develop]
+![Build Status](https://travis-ci.org/dragonmark/dragonmark.svg?branch=develop)
 
 ## More
 
