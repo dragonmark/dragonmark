@@ -4,6 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
+                 [prismatic/schema "0.2.4"]
                  [com.cognitect/transit-clj "0.8.229"]
                  [com.cognitect/transit-cljs "0.8.137"]
                  [prismatic/schema "0.2.4"]

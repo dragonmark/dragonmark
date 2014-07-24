@@ -245,7 +245,8 @@ where the function applies the function with the named parameters"
                                   ~@(map (fn [p] `(contains? ~xn ~p)) arity)
                                   )
                                 `(apply ~(:name info) [~@(map (fn [p] `(~p ~xn)) arity)])]) params)
-                   :else (with-meta {:error (str "parameters not matched. expecting " ~(str (into [] params)) " but got " (keys ~xn))} {:error true}))
+                   :else (with-meta {:error (str "parameters not matched. expecting " 
+                                                 ~(str (into [] params)) " but got " (keys ~xn))} {:error true}))
         ]
     
   [(-> info :name name)
@@ -296,7 +297,6 @@ Plays very well with `gofor`."
               (map meta)
               (into [])))
         the-funcs (map build-func info)
-
 
         cmds (into {} (map (fn [x] [(-> x :name name) (:doc x)]) info))
 

@@ -4,3 +4,4 @@ target
 .nrepl-*
 .repl
 out
+pom.xml
