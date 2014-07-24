@@ -1,6 +1,9 @@
 (ns dragonmark.core
-  #+cljs (:require-macros [cljs.core.async.macros :refer [go]])
+  #+cljs (:require-macros
+          [cljs.core.async.macros :refer [go]]
+          [schema.core :as sc])
   (:require
+   [schema.core :as sc]
    #+clj [clojure.core.async :as async :refer [go chan timeout]]
    #+cljs [cljs.core.async :as async :refer [chan timeout]]
    )
@@ -157,7 +160,21 @@ to the result-chan"
 ```
 "
 [& info]
-(let [
+(let [cljs-macro (boolean (:ns &env))
+
+      
+      [chan go <! close! >!] (if cljs-macro '[cljs.core.async/chan
+                                              cljs.core.async.macros/go
+                                              cljs.core.async/<!
+                                              cljs.core.async/close!
+                                              cljs.core.async/>!]
+                          
+                          '[clojure.core.async/chan
+                            clojure.core.async/go
+                            clojure.core.async/<!
+                            clojure.core.async/close!
+                            clojure.core.async/>!])
+
       [err info] 
       (or
        (and
@@ -174,16 +191,16 @@ to the result-chan"
                   (if (= :timeout (-> pairs last first))
                     [(-> pairs last second) (butlast pairs)]
                     [30000 pairs])]
-              `(let [chan# (~'chan)]
+              `(let [chan# (~chan)]
                  (go-parallel 
                   ~(mapv (fn [[_ [cmd chan params]]] 
                            `{:chan ~chan 
                              :msg (with-meta (assoc ~params :_cmd ~(name cmd)) {:local true})
                              }) pairs) 
                   ~timeout chan#)
-                 (~'go
-                  (let [res# (~'<! chan#)]
-                    (~'close! chan#)
+                 (~go
+                  (let [res# (~<! chan#)]
+                    (~close! chan#)
                     (if (vector? res#)
                       (let [answers# (partition 2 (interleave '[~@(map first pairs)] res#))
                             errors# (filter #(-> % second :error) answers#)]
@@ -211,10 +228,126 @@ to the result-chan"
        ~(process-info info)))))
 
       
-      
-;; (gofor 
-;;  [root (get-service @env-root {:service 'root})]
-;;  [added (add root {:service 'wombat2 :channel (chan) :public true})]
-;;  [b (list root)]
-;;  :let [a (+ 1 1)]
-;;  (println "dog: " a " and " b " root " root " added " added) :error (println "Got an error " &err " for frogs " &var))
+#+clj (sc/defn ^:private expand-symbol :- [(sc/one sc/Symbol "symbol") 
+                                           (sc/one sc/Keyword "keyword") 
+                                           (sc/one sc/Str "string")]
+  "Expand a symbol into a Vector of symbol, keyword, string"
+  [in :- sc/Symbol]
+  [in (keyword in) (name in)])
+
+#+clj
+(defn- build-func
+  "Takes a function defintion and builds a name/function pair
+where the function applies the function with the named parameters"
+  [info]
+  (let [xn `x#
+        params (->> info :arglists (sort #(> (count %1) (count %2))))
+        params (map #(map keyword %) params)
+        the-cond `(cond 
+                   ~@(mapcat (fn [arity]
+                               [`(and 
+                                  ~@(map (fn [p] `(contains? ~xn ~p)) arity)
+                                  )
+                                `(apply ~(:name info) [~@(map (fn [p] `(~p ~xn)) arity)])]) params)
+                   :else (with-meta {:error (str "parameters not matched. expecting " ~(str (into [] params)) " but got " (keys ~xn))} {:error true}))
+        ]
+    
+  [(-> info :name name)
+   `(fn [~xn]
+      ~the-cond
+      )]))
+
+#+clj
+(defn- wrap-in-thread
+  "Wraps the call in a thread if it's on the JVM"
+  [env s-exp]
+  (if (:ns env) s-exp
+      `(future ~s-exp)))
+
+#+clj
+(defmacro create-service
+  "Looks at all the defined functins in the current namespace that have :service in their metadata and
+create a channel that listens for messages on the channel and responds to the messages by calling the
+function and sending the result back to the channel."
+  [the-name]
+  (let [cljs-macro (boolean (:ns &env))
+
+        my-ns (if cljs-macro cljs.analyzer/*cljs-ns* *ns*)
+
+        [chan go <! >!] (if cljs-macro '[cljs.core.async/chan
+                                         cljs.core.async.macros/go
+                                         cljs.core.async/<!
+                                         cljs.core.async/>!]
+
+                            '[clojure.core.async/chan
+                              clojure.core.async/go
+                              clojure.core.async/<!
+                              clojure.core.async/>!])
+
+        info 
+        (if cljs-macro
+         (some->> (cljs.analyzer/get-namespace my-ns) :defs vals 
+                  (filter :service)
+                  (into []))
+         (->> (ns-publics my-ns)
+              vals
+              (filter #(-> % meta :service))
+              (map meta)
+              (into [])))
+        the-funcs (map build-func info)
+
+        cmds (into {} (map (fn [x] [(-> x :name name) (:doc x)]) info))
+
+        built-funcs (merge {"_commands" 
+                            `(fn [x#] ~cmds)
+                            }
+                           (into {} the-funcs))
+
+        answer `answer#
+
+        the-func `the-func#
+
+        it `it#
+
+        cmd `cmd#
+
+        wrapper `wrapper#
+        ]
+    ;; (.println System/out (str "ns " my-ns " and sym " cmds ))
+    `(let [c# (~chan)
+           funcs# ~built-funcs]
+       (~go
+        (loop [~it (~<! c#)]
+          (if (nil? ~it) nil
+              (let [~cmd (:_cmd ~it)
+                    ~answer (:_answer ~it)
+                    ~the-func (funcs# ~cmd)
+                    ~wrapper (or (-> ~it meta :bound-fn)
+                                 (fn [f# p#] (f# p#))) 
+                    ]
+                ~(wrap-in-thread 
+                  &env
+                  `(let [res# (if ~the-func 
+                                ~(if cljs-macro
+                                   `(try 
+                                      (let [result# (~wrapper ~the-func ~it)]
+                                        (if (-> result# meta :error) result# {:result result#}))
+                                      (catch js/Object 
+                                          excp# 
+                                        {:exception excp#}))
+                                   `(try 
+                                      (let [result# (~wrapper ~the-func ~it)]
+                                        (if (-> result# meta :error) result# {:result result#}))
+                                      (catch Exception
+                                          excp# 
+                                        {:exception excp#})))
+                                {:error (str "Command " ~cmd " not found")})
+                         ]
+                     (when ~answer
+                       (~go (~>! ~answer res#)))))
+                (recur (~<! c#))
+              )
+              )))
+       c#
+       )
+  ))
