@@ -1,6 +1,7 @@
 (ns dragonmark.core-test
   (:require 
    [dragonmark.core :as dc]
+   [schema.core :as sc]
    #+clj [clojure.core.async :as async :refer [go chan timeout <! close!]]
    #+cljs [cljs.core.async :as async :refer [chan timeout <! close!]]
    #+cljs [cemerick.cljs.test :as t]
@@ -9,6 +10,7 @@
    )
   #+cljs (:require-macros [cemerick.cljs.test :as t
                            :refer (is deftest with-test run-tests testing test-var)]
+                          [schema.macros :as sc]
                           [cljs.core.async.macros :as async :refer [go]]
                           [dragonmark.core :as dc])
   )
@@ -59,3 +61,33 @@
             (t/done))
           25)
   )
+
+(sc/defn ^:service get-42 :- sc/Num
+  "Hello"
+  ([] 42)
+  ([x :- sc/Num] (+ x 42)))
+
+(sc/defn ^:service plus-one :- sc/Num
+  [x :- sc/Num]
+  (+ 1 x))
+
+
+(deftest ^:async build-service-test
+  (let [atom-42 (atom nil)]
+
+    (dc/gofor
+     :let [service (dc/build-service)]
+     [x (get-42 service)]
+     [y (plus-one service {:x x})]
+     (reset! atom-42 [x y])
+     :error (reset! atom-42 &err))
+
+  #+clj (do
+          (Thread/sleep 100)
+          (is (= @atom-42 [42 43])))
+
+  #+cljs (js/setTimeout
+          (fn []
+            (is (= @atom-42 [42 43]))
+            (t/done))
+          25)))

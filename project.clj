@@ -6,6 +6,7 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [com.cognitect/transit-clj "0.8.229"]
                  [com.cognitect/transit-cljs "0.8.137"]
+                 [prismatic/schema "0.2.4"]
                  [org.clojure/clojurescript "0.0-2268"]
                  [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
                  ]
@@ -16,7 +17,7 @@
             [com.keminglabs/cljx "0.4.0"]
             [com.cemerick/clojurescript.test "0.3.1"]]
 
-  :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store"]
+  :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store|\.props"]
 
   :cljx
   {:builds
