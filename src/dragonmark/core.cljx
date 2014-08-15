@@ -19,9 +19,16 @@
 
 (def i-got-it
   "Return this from the message handler if the
-answer is going to be sent back to the return channel
-ansynchronously"
+  answer is going to be sent back to the return channel
+  ansynchronously"
   :dragonmark.core:i_got_it)
+
+(defn- error-or-answer
+  "If the answer is not {:error something} wrap in {:answer value}"
+  [value]
+  (or
+   (:error value)
+   {:answer value}))
 
 (defn- process
   "Processes a message sent to the root channel"
@@ -46,11 +53,11 @@ ansynchronously"
                   {:error "Cannot add a service without a :local in the meta of the message"})
 
           "remove" (if local?
-                      (let [old (get-in @env [:services (:service message)])]
-                        (when old
-                          (go (async/>! old {:_cmd "removed_from_root"})))
-                        (swap! env update-in [:services] dissoc
-                               (:service message)))
+                     (let [old (get-in @env [:services (:service message)])]
+                       (when old
+                         (go (async/>! old {:_cmd "removed_from_root"})))
+                       (swap! env update-in [:services] dissoc
+                              (:service message)))
 
                      {:error "Cannot add a service without a :local in the meta of the message"})
 
@@ -63,10 +70,14 @@ ansynchronously"
             (if result {:answer result} {:error
                                          (str "Service " (:service message)
                                               " not found")})
-           )
+            )
 
           (or
-           (some-> (get (:commands @env) command) (apply [message env]))
+           (try
+             (some-> (get (:commands @env) command)
+                     (apply [message env])
+                     error-or-answer)
+             (catch Exception e (.printStackTrace e)))
            {:error
             (str "Unabled to process command: "
                  command)}))]
@@ -77,12 +88,12 @@ ansynchronously"
 
 (defn build-root-channel
   "Builds a root channel (usually put in env-root,
-but can be stand-alone so there can be multiple
-root channels in a single address space... nice for testing.
-The commands parameter is a map of String/function where the
-String is the name of the command and the function is a two
-parameter function (message and env) that returns a value to
-send to the answer channel or :dragonmark.core:i_got_it"
+  but can be stand-alone so there can be multiple
+  root channels in a single address space... nice for testing.
+  The commands parameter is a map of String/function where the
+  String is the name of the command and the function is a two
+  parameter function (message and env) that returns a value to
+  send to the answer channel or :dragonmark.core:i_got_it"
   [commands]
   (let [c (chan 5)
         env (atom {:services
@@ -91,14 +102,14 @@ send to the answer channel or :dragonmark.core:i_got_it"
                    :commands commands})
         ]
     (go
-     (loop []
-       (let [message (async/<! c)]
-         (if (nil? message) '() ;; nil... closed channel... bye
-             (do
-               (process message env)
-               (recur)))
-       )
-     ))
+      (loop []
+        (let [message (async/<! c)]
+          (if (nil? message) nil ;; nil... closed channel... bye
+              (do
+                (process message env)
+                (recur)))
+          )
+        ))
     c))
 
 (defn- index-of
@@ -116,10 +127,10 @@ send to the answer channel or :dragonmark.core:i_got_it"
 
 (defn go-parallel
   "Run a bunch of go routines in parallel. params is a sequence of {:chan :msg}.
-For each param, a return channel is created and sent with the messages. When
-all the messages have been answered, to result is sent back to
-the result chan. If there's a timeout waiting, then send a timeout error
-to the result-chan"
+  For each param, a return channel is created and sent with the messages. When
+  all the messages have been answered, to result is sent back to
+  the result chan. If there's a timeout waiting, then send a timeout error
+  to the result-chan"
   [params timeout result-chan]
   (let [chans (map (fn [p]
                      (let [ret-chan (async/chan)]
@@ -135,36 +146,36 @@ to the result-chan"
                          (doall (map async/close! (rest  alt-on)))
                          )]
     (go
-     (loop [ret ret cnt 0]
-       (let [[value chan] (async/alts! alt-on)]
-         (if (= chan toc)
-           (close-and-send {:error "timeout"})
-           (let [pos (index-of alt-on chan)
-                 ret (assoc ret (- pos 1) value)
-                 cnt (+ 1 cnt)]
-             (if (= len cnt)
-               (close-and-send ret)
-               (recur ret cnt)
-               )
-             )))
-       ))
+      (loop [ret ret cnt 0]
+        (let [[value chan] (async/alts! alt-on)]
+          (if (= chan toc)
+            (close-and-send {:error "timeout"})
+            (let [pos (index-of alt-on chan)
+                  ret (assoc ret (- pos 1) value)
+                  cnt (+ 1 cnt)]
+              (if (= len cnt)
+                (close-and-send ret)
+                (recur ret cnt)
+                )
+              )))
+        ))
     ))
 
 #+clj
 (defmacro gofor
   "A for comprehension built out of go blocks
 
-```
-(gofor
+  ```
+  (gofor
   [a (foo channel {:thing value :other_thing other_value})]
   :let [b (+ a 1)]
   [c (baz other_channel)
-   d (moose third_channel {:p b}
-   :timeout 45000]
+  d (moose third_channel {:p b}
+  :timeout 45000]
   (println a b c)
   :error (println &err &at))
-```
-"
+  ```
+  "
   [& info]
   (let [cljs-macro (boolean (:ns &env))
 
@@ -207,21 +218,21 @@ to the result-chan"
                                }) pairs)
                     ~timeout chan#)
                    (~go
-                    (let [res# (~<! chan#)]
-                      (~close! chan#)
-                      (if (vector? res#)
-                        (let [answers# (partition 2
-                                                  (interleave
-                                                   '[~@(map first pairs)] res#))
-                              errors# (filter #(-> % second :error) answers#)]
-                          (if (not (empty? errors#))
-                            (~err-var
-                             (-> errors# first first)
-                             (-> errors# first second))
+                     (let [res# (~<! chan#)]
+                       (~close! chan#)
+                       (if (vector? res#)
+                         (let [answers# (partition 2
+                                                   (interleave
+                                                    '[~@(map first pairs)] res#))
+                               errors# (filter #(-> % second :error) answers#)]
+                           (if (not (empty? errors#))
+                             (~err-var
+                              (-> errors# first first)
+                              (-> errors# first second))
 
-                            (let [[~@(map first pairs)] (map :answer res#)]
-                              ~other)))
-                        (~err-var res# '[~@(mapv first pairs)])))))
+                             (let [[~@(map first pairs)] (map :answer res#)]
+                               ~other)))
+                         (~err-var res# '[~@(mapv first pairs)])))))
                 ))
 
             (process-info [info]
@@ -244,7 +255,7 @@ to the result-chan"
 #+clj
 (defn- build-func
   "Takes a function defintion and builds a name/function pair
-where the function applies the function with the named parameters"
+  where the function applies the function with the named parameters"
   [info]
   (let [xn `x#
         params (:arglists info)
@@ -265,10 +276,10 @@ where the function applies the function with the named parameters"
                                         (keys ~xn))} {:error true}))
         ]
 
-  [(-> info :name name)
-   `(fn [~xn]
-      ~the-cond
-      )]))
+    [(-> info :name name)
+     `(fn [~xn]
+        ~the-cond
+        )]))
 
 #+clj
 (defn- wrap-in-thread
@@ -280,12 +291,12 @@ where the function applies the function with the named parameters"
 #+clj
 (defmacro build-service
   "builds a service -- a channel that looks at all the public functions in the
-current package marked with {:service true} and wraps up message responders.
-When a message comes in with a :_cmd that has the name of the function, the
-named parameters are unwrapped and the function is dispatched and the response
- is sent back to the channel in :_return.
+  current package marked with {:service true} and wraps up message responders.
+  When a message comes in with a :_cmd that has the name of the function, the
+  named parameters are unwrapped and the function is dispatched and the response
+  is sent back to the channel in :_return.
 
-Plays very well with `gofor`."
+  Plays very well with `gofor`."
   []
   (let [cljs-macro (boolean (:ns &env))
 
@@ -305,14 +316,14 @@ Plays very well with `gofor`."
 
         info
         (if cljs-macro
-         (some->> (cljs.analyzer/get-namespace my-ns) :defs vals
-                  (filter :service)
-                  (into []))
-         (->> (ns-publics my-ns)
-              vals
-              (filter #(-> % meta :service))
-              (map meta)
-              (into [])))
+          (some->> (cljs.analyzer/get-namespace my-ns) :defs vals
+                   (filter :service)
+                   (into []))
+          (->> (ns-publics my-ns)
+               vals
+               (filter #(-> % meta :service))
+               (map meta)
+               (into [])))
         the-funcs (map build-func info)
 
         cmds (into {} (map (fn [x] [(-> x :name name) (:doc x)]) info))
@@ -337,39 +348,38 @@ Plays very well with `gofor`."
                  funcs# ~built-funcs
                  ]
              (~go
-              (loop [~it (~<! c#)]
-                (if (nil? ~it) nil
-                    (let [~cmd (:_cmd ~it)
-                          ~answer (:_return ~it)
-                          ~the-func (funcs# ~cmd)
-                          ~wrapper (or (-> ~it meta :bound-fn)
-                                       (fn [f# p#] (f# p#)))
-                          ]
-                      ~(wrap-in-thread
-                        &env
-                        `(let [res# (if ~the-func
-                                      (try
-                                        (let [result# (~wrapper ~the-func ~it)]
-                                          (if (-> result# meta :error) result#
-                                              {:answer result#}))
-                                        (catch ~(if cljs-macro
-                                                  `js/Object
-                                                  `Exception)
-                                            excp# {:error excp#}))
-                                      {:error (str "Command " ~cmd
-                                                   " not found")})
-                               ]
-                           (when ~answer
-                             (~go (~>! ~answer res#)))))
-                      (recur (~<! c#))
-                      )
-                    )))
+               (loop [~it (~<! c#)]
+                 (if (nil? ~it) nil
+                     (let [~cmd (:_cmd ~it)
+                           ~answer (:_return ~it)
+                           ~the-func (funcs# ~cmd)
+                           ~wrapper (or (-> ~it meta :bound-fn)
+                                        (fn [f# p#] (f# p#)))
+                           ]
+                       ~(wrap-in-thread
+                         &env
+                         `(let [res# (if ~the-func
+                                       (try
+                                         (let [result# (~wrapper ~the-func ~it)]
+                                           (if (-> result# meta :error) result#
+                                               {:answer result#}))
+                                         (catch ~(if cljs-macro
+                                                   `js/Object
+                                                   `Exception)
+                                             excp# {:error excp#}))
+                                       {:error (str "Command " ~cmd
+                                                    " not found")})
+                                ]
+                            (when ~answer
+                              (~go (~>! ~answer res#)))))
+                       (recur (~<! c#))
+                       )
+                     )))
              c#
              )
           ]
-      ;;  (.println System/err (str "ret\n" ret))
       ret)
-  ))
+    ))
 
 (defprotocol Transport
   "A transport to another address space"
@@ -413,7 +423,10 @@ routed to the local `root' or to the appropriate GUID"
         my-mode (atom :starting)
         chan-to-guid (atom {})
         guid-to-chan (atom {})
-        last-10 (atom [])
+        running? (atom true)
+        seen-hello? (atom false)
+        last-10 (atom nil)
+        ack-channels (atom {})
         guid-closed (atom (fn [x]))
         send-message (atom (fn [guid message ack-chan]))
         write-handler
@@ -435,7 +448,8 @@ routed to the local `root' or to the appropriate GUID"
                      (let [guid (du/next-guid)]
                        (swap! chan-to-guid assoc item guid)
                        (on-close item (fn [] (@guid-closed guid)))
-                       (swap! guid-to-chan assoc guid {:chan item :local true :proxy false})
+                       (swap! guid-to-chan assoc guid {:chan item
+                                                       :local true :proxy false})
                        guid
                        )
                      )))
@@ -456,8 +470,9 @@ routed to the local `root' or to the appropriate GUID"
                    (if-let [the-chan (get @guid-to-chan guid)]
                      (:chan the-chan)
                      (let [proxy-chan (chan)]
-                       (swap! chan-to-guid assoc guid {:chan proxy-chan :local false :proxy true})
-                       (swap! guid-to-chan assoc proxy-chan guid)
+                       (swap! guid-to-chan assoc guid {:chan proxy-chan
+                                                       :local false :proxy true})
+                       (swap! chan-to-guid assoc proxy-chan guid)
                        (on-close proxy-chan
                                  (fn []
                                    (do
@@ -472,23 +487,19 @@ routed to the local `root' or to the appropriate GUID"
                                    (@send-message guid message ack-chan)
                                    (async/<! ack-chan)
                                    (async/close! ack-chan)
-                                   (recur)
+                                   (if @running? (recur) nil)
                                    ))
                              )
                            ))
-                       proxy-chan)
-                     )
-                   )
-                  ) )
-
-
+                       proxy-chan)))))
         ]
     (letfn [#+clj
             (do-serialize [a-form]
                           (let [bos (java.io.ByteArrayOutputStream.)]
                             (t/write (t/writer bos :json
                                                {:handlers
-                                                {clojure.core.async.impl.channels.ManyToManyChannel write-handler}} )
+                                                {ManyToManyChannel
+                                                 write-handler}} )
                                      a-form)
                             (.toString bos "UTF-8")))
 
@@ -499,13 +510,130 @@ routed to the local `root' or to the appropriate GUID"
                                         (.getBytes a-string "UTF-8"))
                                        :json
                                        {:handlers {"chan-guid"
-                                                   read-handler}})))]
-      (reify Transport
-        (remote-root [this] remote-proxy)
-        (close! [this]
-          (async/close! remote-proxy)
-          ;; FIXME
-          ))))
+                                                   read-handler}})))
+            ]
+      (let [sender-ack-chan (chan) ;; send acks to this channel
+            sender-chan ;; send a message to this channel and it's given a GUID
+            ;; serialized
+            ;; and forwarded across the wire
+            (let [my-chan (chan)]
+              (go
+                (loop []
+                  (let [message (async/<! my-chan)]
+                    (when message
+                      (let [guid (or (:guid message) (du/next-guid))
+                            message (assoc message :guid guid)
+                            message-str (do-serialize message)]
+                        (async/>! dest-chan message-str)
+                        (loop []
+                          (let [resp-guid (async/<! sender-ack-chan)]
+                            (cond
+                             (nil? resp-guid) nil
+                             (= resp-guid guid) nil
+
+                             ;; keep sending the message 'til we get an ack
+                             :else (do (async/>! dest-chan message-str) (recur))))))
+                      (if @running? (recur) nil)))
+                  ))
+              my-chan)
+            ]
+        (letfn [(do-guid-closed [guid]
+                  (go (async/>! sender-chan {:type :close :target guid}))
+                  )
+                (do-send-message [target message ack-chan]
+                  (let [guid (du/next-guid)]
+                    (when ack-chan
+                      (swap! ack-channels assoc guid ack-chan))
+                    (go (async/>! sender-chan {:type :forward
+                                               :target target
+                                               :guid guid
+                                               :body (do-serialize message)}))
+                    ))
+                ]
+          (reset! guid-closed do-guid-closed)
+          (reset! send-message do-send-message)
+          (go
+            (loop []
+              (when-some [message (async/<! remote-proxy)]
+                (let [ack-chan (chan)]
+                  (do-send-message "root" message ack-chan)
+                  (async/<! ack-chan)
+                  (async/close! ack-chan)
+                  (if @running? (recur) nil)))))
+          (go
+            (loop []
+              (let [message-str (async/<! source-chan)]
+                (when message-str
+                  (let [message (do-deserialize message-str)
+                        guid (:guid message)
+                        type (:type message)]
+
+                    ;; ack the message
+                    (when guid
+                      (go (async/>! dest-chan (do-serialize {:type :ack
+                                                             :target guid}))))
+                    (if (and (not guid) (contains? (into #{} @last-10) guid))
+                      nil ;; if we've processed the message (seen the GUID) do nothing
+
+                      (do
+                        (when guid
+                          (swap! last-10 (fn [v] (take 10 (cons guid v)))))
+
+                        (condp = type
+                          :hello
+                          (when (not @seen-hello?)
+                            (reset! seen-hello? true)
+                            (go (async/>! sender-chan {:type :hello}))
+                            )
+
+                          :bye
+                          (do
+                            (reset! running? false)
+                            ;; FIXME what else do we do?
+                            )
+
+                          :ack
+                          (go
+                            (async/>! sender-ack-chan (:target message)))
+
+                          :close
+                          (let [guid (:target message)
+                                info (get @guid-to-chan guid)]
+                            (when (and info (:proxy info))
+                              (let [the-chan (:chan info)]
+                                (swap! guid-to-chan dissoc guid)
+                                (swap! chan-to-guid dissoc the-chan)
+                                (async/close! the-chan))
+                              ))
+
+                          :forward
+                          (let [target-guid (:target message)
+                                target (.fromRep read-handler target-guid)
+                                inner-message (do-deserialize (:body message))]
+                            (go
+                              (async/>! target inner-message)
+                              (async/>! sender-chan {:type :ack-forward
+                                                     :target guid})))
+
+                          :ack-forward
+                          (when-some [target (:target message)]
+                            (when-some [ack-chan (get @ack-channels target)]
+                              (swap! ack-channels dissoc target)
+                              (go (async/>! ack-chan target))
+                              )))))
+                    )
+                  (if @running? (recur) nil)))
+              )))
+        (reify Transport
+          (remote-root [this] remote-proxy)
+          (close! [this]
+
+            (async/close! remote-proxy)
+            (do
+              (async/>! sender-chan {:type :bye})
+              (reset! running? false))
+            ;; FIXME what else do we close down?
+            )))))
   )
 
 {:type #{:hello :bye :ack :close :forward :ack-forward}

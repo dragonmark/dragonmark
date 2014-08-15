@@ -100,8 +100,27 @@
         b-info (atom 0)
         a-root (dc/build-root-channel {"get" (fn [msg env] @a-info)
                                        "inc" (fn [msg env] (swap! a-info inc))})
-        b-root (dc/build-root-channel {"get" (fn [msg env] @b-info)
-                                       "inc" (fn [msg env] (swap! b-info inc))})
+        b-root (dc/build-root-channel {"get" (fn [msg env]
+                                               @b-info)
+                                       "inc" (fn [msg env]
+                                               (swap! b-info inc))})
         a-transport (dc/build-transport a-root a-chan b-chan)
-        b-transport (dc/build-transport b-root b-chan a-chan)]
+        b-transport (dc/build-transport b-root b-chan a-chan)
+        b-root-proxy (dc/remote-root a-transport)
+        a-root-proxy (dc/remote-root b-transport)
+        res (atom nil)
+        ]
+    (dc/gofor
+     [_ (inc b-root-proxy)]
+     [answer (get b-root-proxy)]
+     (reset! res answer)
+     :error (reset! res &err))
+
+    #+clj
+    (do
+      (Thread/sleep 600)
+      (is (= 1 @res))
+      (is (= @res @b-info))
+      )
+
     ))
