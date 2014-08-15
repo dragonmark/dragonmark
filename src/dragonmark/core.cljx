@@ -31,7 +31,9 @@ ansynchronously"
         local? (-> message meta :local boolean)
         answer
         (case command
-          "list" {:answer (->> @env :services (filter #(or local? (-> % second :public))) (map first))}
+          "list" {:answer (->> @env :services
+                               (filter #(or local? (-> % second :public)))
+                               (map first))}
 
           "add" (if local?
                   (let [old (get-in @env [:services (:service message)])]
@@ -45,8 +47,10 @@ ansynchronously"
 
           "remove" (if local?
                       (let [old (get-in @env [:services (:service message)])]
-                        (when old (go (async/>! old {:_cmd "removed_from_root"})))
-                        (swap! env update-in [:services] dissoc (:service message)))
+                        (when old
+                          (go (async/>! old {:_cmd "removed_from_root"})))
+                        (swap! env update-in [:services] dissoc
+                               (:service message)))
 
                      {:error "Cannot add a service without a :local in the meta of the message"})
 
@@ -56,7 +60,9 @@ ansynchronously"
                                (:public result))
                          (:channel result)
                          nil)]
-            (if result {:answer result} {:error (str "Service " (:service message) " not found")})
+            (if result {:answer result} {:error
+                                         (str "Service " (:service message)
+                                              " not found")})
            )
 
           (or
@@ -196,17 +202,23 @@ to the result-chan"
                    (go-parallel
                     ~(mapv (fn [[_ [cmd chan params]]]
                              `{:chan ~chan
-                               :msg (with-meta (assoc ~params :_cmd ~(name cmd)) {:local true})
+                               :msg (with-meta (assoc ~params :_cmd ~(name cmd))
+                                      {:local true})
                                }) pairs)
                     ~timeout chan#)
                    (~go
                     (let [res# (~<! chan#)]
                       (~close! chan#)
                       (if (vector? res#)
-                        (let [answers# (partition 2 (interleave '[~@(map first pairs)] res#))
+                        (let [answers# (partition 2
+                                                  (interleave
+                                                   '[~@(map first pairs)] res#))
                               errors# (filter #(-> % second :error) answers#)]
                           (if (not (empty? errors#))
-                            (~err-var (-> errors# first first) (-> errors# first second))
+                            (~err-var
+                             (-> errors# first first)
+                             (-> errors# first second))
+
                             (let [[~@(map first pairs)] (map :answer res#)]
                               ~other)))
                         (~err-var res# '[~@(mapv first pairs)])))))
@@ -245,9 +257,12 @@ where the function applies the function with the named parameters"
                                [`(and
                                   ~@(map (fn [p] `(contains? ~xn ~p)) arity)
                                   )
-                                `(apply ~(:name info) [~@(map (fn [p] `(~p ~xn)) arity)])]) params)
-                   :else (with-meta {:error (str "parameters not matched. expecting "
-                                                 ~(str (into [] params)) " but got " (keys ~xn))} {:error true}))
+                                `(apply ~(:name info) [~@(map (fn [p] `(~p ~xn))
+                                                              arity)])]) params)
+                   :else (with-meta
+                           {:error (str "parameters not matched. expecting "
+                                        ~(str (into [] params)) " but got "
+                                        (keys ~xn))} {:error true}))
         ]
 
   [(-> info :name name)
@@ -265,9 +280,10 @@ where the function applies the function with the named parameters"
 #+clj
 (defmacro build-service
   "builds a service -- a channel that looks at all the public functions in the
-current package marked with {:service true} and wraps up message responders. When
-a message comes in with a :_cmd that has the name of the function, the named parameters
-are unwrapped and the function is dispatched and the response is sent back to the channel in :_return.
+current package marked with {:service true} and wraps up message responders.
+When a message comes in with a :_cmd that has the name of the function, the
+named parameters are unwrapped and the function is dispatched and the response
+ is sent back to the channel in :_return.
 
 Plays very well with `gofor`."
   []
@@ -334,9 +350,14 @@ Plays very well with `gofor`."
                         `(let [res# (if ~the-func
                                       (try
                                         (let [result# (~wrapper ~the-func ~it)]
-                                          (if (-> result# meta :error) result# {:answer result#}))
-                                        (catch ~(if cljs-macro `js/Object `Exception) excp# {:error excp#}))
-                                      {:error (str "Command " ~cmd " not found")})
+                                          (if (-> result# meta :error) result#
+                                              {:answer result#}))
+                                        (catch ~(if cljs-macro
+                                                  `js/Object
+                                                  `Exception)
+                                            excp# {:error excp#}))
+                                      {:error (str "Command " ~cmd
+                                                   " not found")})
                                ]
                            (when ~answer
                              (~go (~>! ~answer res#)))))
@@ -380,7 +401,8 @@ Plays very well with `gofor`."
     (add-watch (.-closed chan) :none (fn [k r os ns] (func))))
   )
 
-#+clj (sc/defn build-transport :- Transport
+#+clj
+(sc/defn build-transport :- Transport
   "Builds a transport that consumes strings from `source-chan' and sends
 string messages to `dest-chan'. Incoming messages will either be
 routed to the local `root' or to the appropriate GUID"

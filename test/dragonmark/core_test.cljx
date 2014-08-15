@@ -92,6 +92,7 @@
             (t/done))
           25)))
 
+#+clj
 (deftest ^:async distributed-test
   (let [a-chan (chan)
         b-chan (chan)
