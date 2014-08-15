@@ -5,8 +5,9 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [prismatic/schema "0.2.4"]
-                 [com.cognitect/transit-clj "0.8.229"]
-                 [com.cognitect/transit-cljs "0.8.137"]
+                 [com.cognitect/transit-clj "0.8.247"]
+                 [dragonmark/util "0.1.1"]
+                 [com.cognitect/transit-cljs "0.8.178"]
                  [prismatic/schema "0.2.4"]
                  [org.clojure/clojurescript "0.0-2268"]
                  [org.clojure/core.async "0.1.301.0-deb34a-alpha"]
@@ -40,5 +41,5 @@
 
   :profiles
   {:provided {:dependencies [[org.clojure/clojurescript "0.0-2268"]]}}
-  
+
 )
