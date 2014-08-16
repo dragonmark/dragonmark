@@ -1,4 +1,4 @@
-(defproject dragonmark "0.1.0-SNAPSHOT"
+(defproject dragonmark "0.1.0"
   :description "Distributed CSP/core.async"
   :url "http://dragonmark.org"
   :license {:name "Eclipse Public License"
