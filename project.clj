@@ -1,6 +1,6 @@
-(defproject dragonmark "0.1.0"
+(defproject dragonmark/circulate "0.1.0"
   :description "Distributed CSP/core.async"
-  :url "http://dragonmark.org"
+  :url "https://github.com/dragonmark/dragonmark"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
@@ -18,6 +18,12 @@
             [lein-cljsbuild "1.0.3"]
             [com.keminglabs/cljx "0.4.0"  :exclusions [org.clojure/clojure]]
             [com.cemerick/clojurescript.test "0.3.1"  :exclusions [org.clojure/clojure]]]
+
+  :codox {:defaults {:doc/format :markdown}
+          :sources ["target/generated/src"]
+          :output-dir "doc/codox"
+          :src-linenum-anchor-prefix "L"
+          :src-uri-mapping {#"target/generated/src" #(str "src/" % "x")}}
 
   :jar-exclusions [#"\.cljx|\.swp|\.swo|\.DS_Store|\.props"]
 

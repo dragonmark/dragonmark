@@ -1,7 +1,7 @@
-(ns dragonmark.core-test
+(ns dragonmark.circulate.core-test
   (:require
    [cognitect.transit :as ct]
-   [dragonmark.core :as dc]
+   [dragonmark.circulate.core :as dc]
    [schema.core :as sc]
    #+clj [clojure.core.async :as async :refer [go chan timeout <! close!]]
    #+cljs [cljs.core.async :as async :refer [chan timeout <! close!]]
@@ -13,7 +13,7 @@
                            :refer (is deftest with-test run-tests testing test-var)]
                           [schema.macros :as sc]
                           [cljs.core.async.macros :as async :refer [go]]
-                          [dragonmark.core :as dc])
+                          [dragonmark.circulate.core :as dc])
   )
 
 (def my-root (dc/build-root-channel {}))

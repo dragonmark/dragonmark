@@ -1,4 +1,4 @@
-(ns dragonmark.core
+(ns dragonmark.circulate.core
   #+cljs (:require-macros [cljs.core.async.macros :refer [go]]
                           [schema.core :as sc])
   (:require
@@ -21,7 +21,7 @@
   "Return this from the message handler if the
   answer is going to be sent back to the return channel
   ansynchronously"
-  :dragonmark.core:i_got_it)
+  :dragonmark.circulate:i_got_it)
 
 (defn- error-or-answer
   "If the answer is not {:error something} wrap in {:answer value}"
@@ -91,7 +91,7 @@
   The commands parameter is a map of String/function where the
   String is the name of the command and the function is a two
   parameter function (message and env) that returns a value to
-  send to the answer channel or :dragonmark.core:i_got_it"
+  send to the answer channel or :dragonmark.circulate:i_got_it"
   [commands]
   (let [c (chan 5)
         env (atom {:services
