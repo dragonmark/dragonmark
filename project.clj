@@ -35,7 +35,7 @@
     {:source-paths ["test"], :output-path "target/generated/test", :rules :cljs}]}
   :source-paths ["src" "target/generated/src"]
   :test-paths   ["test" "target/generated/test"]
-  :hooks [leiningen.cljsbuild cljx.hooks]
+  :hooks [cljx.hooks]
   :cljsbuild
   {:builds
    [{:source-paths ["target/generated/src" "target/generated/test"]
