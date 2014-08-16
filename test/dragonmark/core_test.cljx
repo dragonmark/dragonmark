@@ -1,5 +1,6 @@
 (ns dragonmark.core-test
   (:require
+   [cognitect.transit :as ct]
    [dragonmark.core :as dc]
    [schema.core :as sc]
    #+clj [clojure.core.async :as async :refer [go chan timeout <! close!]]
@@ -82,17 +83,18 @@
      (reset! atom-42 [x y])
      :error (reset! atom-42 &err))
 
-  #+clj (do
-          (Thread/sleep 100)
-          (is (= @atom-42 [42 43])))
+    #+clj (do
+            (Thread/sleep 100)
+            (is (= @atom-42 [42 43])))
 
-  #+cljs (js/setTimeout
-          (fn []
-            (is (= @atom-42 [42 43]))
-            (t/done))
-          25)))
+    #+cljs (js/setTimeout
+            (fn []
+              (is (= @atom-42 [42 43]))
+              (t/done))
+            25)))
 
-#+clj
+
+
 (deftest ^:async distributed-test
   (let [a-chan (chan)
         b-chan (chan)
@@ -109,15 +111,20 @@
         b-root-proxy (dc/remote-root a-transport)
         a-root-proxy (dc/remote-root b-transport)
         res (atom nil)
+        done (atom false)
 
-        #+clj wait-obj #+clj ""
+        #+clj wait-obj #+clj ""]
 
-        ]
     (dc/gofor
      [_ (inc b-root-proxy)]
      [answer (get b-root-proxy)]
-     (reset! res answer)
-     :error (reset! res &err))
+     (do
+       (reset! res answer)
+       (reset! done true))
+     :error
+     (do
+       (reset! res &err)
+       (reset! done true)))
 
     #+clj
     (add-watch res :none (fn [_ _ _ _] (locking wait-obj (.notifyAll wait-obj))))
@@ -130,12 +137,19 @@
       )
 
     #+cljs
-    (js/setTimeout
-     (fn []
-       (is (= 1 1))
-       ;; (is (= 1 @res))
-       ;; (is (= @res @b-info))
-       (t/done))
-     25)
-
+    (let [count (atom 0)]
+      (letfn [(testit []
+                (if (not @done)
+                  (if (> 50000 (swap! count inc))
+                    (js/setTimeout testit 20)
+                    (do
+                      (is (= nil "Timeout"))
+                      (t/done)
+                      ))
+                  (do
+                    (is (= 1 1))
+                    (is (= 1 @res))
+                    (is (= @res @b-info))
+                    (t/done))
+                  ))] (testit)))
     ))

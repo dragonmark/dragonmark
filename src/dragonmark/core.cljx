@@ -431,8 +431,7 @@
   ;; com.cognitect.transit.WriteHandler
   Object
   (tag [_ v] "chan-guid")
-  (rep [_ v]
-    (write-func v))
+  (rep [_ v] (write-func v))
   (stringRep [_ v] (write-func v)))
 
 (defn build-transport
@@ -479,7 +478,7 @@
         write-handler
         #+clj (reify com.cognitect.transit.WriteHandler
                 (tag [_ _] "chan-guid")
-                (stringRep [this bi] (.rep this bi))
+                (stringRep [this item] (write-func item))
                 (rep [_ item] (write-func item))
                 (getVerboseHandler [_] nil))
 
@@ -547,25 +546,33 @@
                              (t/reader (java.io.ByteArrayInputStream.
                                         (.getBytes a-string "UTF-8"))
                                        :json
-                                       {:handlers {"chan-guid"
-                                                   read-handler}})))
+                                       {:handlers {"chan-guid" read-handler}}
+                                       )))
 
             #+cljs
             (do-serialize
              [a-form]
-             (t/write (t/writer
-                       :json
-                       {:handlers
-                        {cljs.core.async.impl.channels/ManyToManyChannel
-                         write-handler}}) a-form))
+             (let [ret
+                   (t/write (t/writer
+                             :json
+                             {:handlers
+                              {cljs.core.async.impl.channels/ManyToManyChannel
+                               write-handler}}) a-form)]
+               ret
+               ))
 
             #+cljs
-            (do-deserialize [a-string]
-                            (t/read (t/reader :json
-                                              {:handlers
-                                               {"chan-guid" read-handler}})
-                                    a-string
-                                    ))
+            (do-deserialize
+             [a-string]
+             (let [ret
+                   (t/read
+                    (t/reader :json
+                              {:handlers {"chan-guid" read-handler}}
+                              )
+                    a-string
+                    )]
+               ret
+               ))
             ]
       (let [sender-ack-chan (chan) ;; send acks to this channel
             sender-chan ;; send a message to this channel and it's given a GUID

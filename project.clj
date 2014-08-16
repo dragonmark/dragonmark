@@ -6,7 +6,7 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [com.cognitect/transit-clj "0.8.247"  :exclusions [org.clojure/clojure]]
                  [dragonmark/util "0.1.1"  :exclusions [org.clojure/clojure]]
-                 [com.cognitect/transit-cljs "0.8.178"  :exclusions [org.clojure/clojure]]
+                 [com.cognitect/transit-cljs "0.8.182"  :exclusions [org.clojure/clojure]]
                  [prismatic/schema "0.2.4"  :exclusions [org.clojure/clojure]]
                  [org.clojure/clojurescript "0.0-2268"]
                  [org.clojure/core.async "0.1.319.0-6b1aca-alpha"
