@@ -454,7 +454,6 @@
         guid-closed (atom (fn [x]))
         send-message (atom (fn [guid message ack-chan]))
 
-
         write-func
         (fn [item]
           (cond
