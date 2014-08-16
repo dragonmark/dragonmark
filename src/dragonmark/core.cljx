@@ -73,11 +73,9 @@
             )
 
           (or
-           (try
-             (some-> (get (:commands @env) command)
-                     (apply [message env])
-                     error-or-answer)
-             (catch Exception e (.printStackTrace e)))
+           (some-> (get (:commands @env) command)
+                   (apply [message env])
+                   error-or-answer)
            {:error
             (str "Unabled to process command: "
                  command)}))]
@@ -391,16 +389,11 @@
     [this])
   )
 
-
-
-(defprotocol Serializer
-  "A serializer and deserializer that does special things for Channels"
-  (serialize [this item transport])
-  (deserialize [this string transport])
-  (find-channel [this guid]))
-
 #+clj
 (defn- chan-closed? "Is the channel closed?" [chan] (some-> (.-closed chan) deref))
+
+#+cljs
+(defn- chan-closed? "Is the channel closed?" [chan]  (.-closed chan))
 
 #+clj
 (defn- on-close
@@ -411,14 +404,45 @@
     (add-watch (.-closed chan) :none (fn [k r os ns] (func))))
   )
 
-#+clj
-(sc/defn build-transport :- Transport
+#+cljs
+(defn- on-close
+  "registers a function to call on close"
+  [chan func]
+  (if (chan-closed? chan)
+    (func)
+    (comment
+      (.watch chan "closed"
+              (fn [id old new]
+                (.log js/console "Closing")
+                (func))))
+    ))
+
+#+cljs
+(deftype TransportImpl [remote-proxy close-func]
+  Transport
+  (remote-root [this] remote-proxy)
+  (close! [this] (close-func)
+    ;; FIXME what else do we close down?
+    )
+  )
+
+#+cljs
+(deftype ChannelHandler [write-func]
+  ;; com.cognitect.transit.WriteHandler
+  Object
+  (tag [_ v] "chan-guid")
+  (rep [_ v]
+    (write-func v))
+  (stringRep [_ v] (write-func v)))
+
+(defn build-transport
   "Builds a transport that consumes strings from `source-chan' and sends
-string messages to `dest-chan'. Incoming messages will either be
-routed to the local `root' or to the appropriate GUID"
+  string messages to `dest-chan'. Incoming messages will either be
+  routed to the local `root' or to the appropriate GUID"
   [root
    source-chan
    dest-chan]
+
   (let [remote-proxy (chan)
         my-mode (atom :starting)
         chan-to-guid (atom {})
@@ -429,69 +453,84 @@ routed to the local `root' or to the appropriate GUID"
         ack-channels (atom {})
         guid-closed (atom (fn [x]))
         send-message (atom (fn [guid message ack-chan]))
+
+
+        write-func
+        (fn [item]
+          (cond
+           (or (nil? item)
+               (chan-closed? item))
+           "closed"
+
+           (= item root)
+           "root"
+
+           :else
+           (if-let [guid (get @chan-to-guid item)]
+             guid
+             (let [guid (du/next-guid)]
+               (swap! chan-to-guid assoc item guid)
+               (on-close item (fn [] (@guid-closed guid)))
+               (swap! guid-to-chan assoc guid {:chan item
+                                               :local true :proxy false})
+               guid
+               )
+             )))
+
         write-handler
         #+clj (reify com.cognitect.transit.WriteHandler
                 (tag [_ _] "chan-guid")
                 (stringRep [this bi] (.rep this bi))
-                (rep [_ item]
-                  (cond
-                   (or (nil? item)
-                       (chan-closed? item))
-                   "closed"
-
-                   (= item root)
-                   "root"
-
-                   :else
-                   (if-let [guid (get @chan-to-guid item)]
-                     guid
-                     (let [guid (du/next-guid)]
-                       (swap! chan-to-guid assoc item guid)
-                       (on-close item (fn [] (@guid-closed guid)))
-                       (swap! guid-to-chan assoc guid {:chan item
-                                                       :local true :proxy false})
-                       guid
-                       )
-                     )))
+                (rep [_ item] (write-func item))
                 (getVerboseHandler [_] nil))
 
-        read-handler
-        #+clj (reify
-                com.cognitect.transit.ReadHandler
-                (fromRep [_ guid]
-                  (cond
-                   (= "closed" guid)
-                   nil
+        #+cljs (ChannelHandler. write-func)
 
-                   (= "root" guid)
-                   root
+        ;; convert a GUID into a Channel
+        read-func
+        (fn [guid]
+          (cond
+           (= "closed" guid)
+           nil
 
-                   :else
-                   (if-let [the-chan (get @guid-to-chan guid)]
-                     (:chan the-chan)
-                     (let [proxy-chan (chan)]
-                       (swap! guid-to-chan assoc guid {:chan proxy-chan
-                                                       :local false :proxy true})
-                       (swap! chan-to-guid assoc proxy-chan guid)
-                       (on-close proxy-chan
-                                 (fn []
-                                   (do
-                                     (swap! chan-to-guid dissoc proxy-chan)
-                                     (swap! guid-to-chan dissoc guid)
-                                     )))
-                       (go
-                         (loop []
-                           (let [message (async/<! proxy-chan)]
-                             (if (nil? message) nil
-                                 (let [ack-chan (chan)]
-                                   (@send-message guid message ack-chan)
-                                   (async/<! ack-chan)
-                                   (async/close! ack-chan)
-                                   (if @running? (recur) nil)
-                                   ))
-                             )
+           (= "root" guid)
+           root
+
+           :else
+           (if-let [the-chan (get @guid-to-chan guid)]
+             (:chan the-chan)
+             (let [proxy-chan (chan)]
+               (swap! guid-to-chan assoc guid {:chan proxy-chan
+                                               :local false :proxy true})
+               (swap! chan-to-guid assoc proxy-chan guid)
+               (on-close proxy-chan
+                         (fn []
+                           (do
+                             (swap! chan-to-guid dissoc proxy-chan)
+                             (swap! guid-to-chan dissoc guid)
+                             )))
+               (go
+                 (loop []
+                   (let [message (async/<! proxy-chan)]
+                     (if (nil? message) nil
+                         (let [ack-chan (chan)]
+                           (@send-message guid message ack-chan)
+                           (async/<! ack-chan)
+                           (async/close! ack-chan)
+                           (if @running? (recur) nil)
                            ))
-                       proxy-chan)))))
+                     )
+                   ))
+               proxy-chan))))
+
+        read-handler
+        #+clj
+        (reify
+          com.cognitect.transit.ReadHandler
+          (fromRep [_ guid] (read-func guid)
+            ))
+        #+cljs read-func
+
         ]
     (letfn [#+clj
             (do-serialize [a-form]
@@ -511,6 +550,23 @@ routed to the local `root' or to the appropriate GUID"
                                        :json
                                        {:handlers {"chan-guid"
                                                    read-handler}})))
+
+            #+cljs
+            (do-serialize
+             [a-form]
+             (t/write (t/writer
+                       :json
+                       {:handlers
+                        {cljs.core.async.impl.channels/ManyToManyChannel
+                         write-handler}}) a-form))
+
+            #+cljs
+            (do-deserialize [a-string]
+                            (t/read (t/reader :json
+                                              {:handlers
+                                               {"chan-guid" read-handler}})
+                                    a-string
+                                    ))
             ]
       (let [sender-ack-chan (chan) ;; send acks to this channel
             sender-chan ;; send a message to this channel and it's given a GUID
@@ -608,7 +664,7 @@ routed to the local `root' or to the appropriate GUID"
 
                           :forward
                           (let [target-guid (:target message)
-                                target (.fromRep read-handler target-guid)
+                                target (read-func target-guid)
                                 inner-message (do-deserialize (:body message))]
                             (go
                               (async/>! target inner-message)
@@ -624,6 +680,7 @@ routed to the local `root' or to the appropriate GUID"
                     )
                   (if @running? (recur) nil)))
               )))
+        #+clj
         (reify Transport
           (remote-root [this] remote-proxy)
           (close! [this]
@@ -633,28 +690,17 @@ routed to the local `root' or to the appropriate GUID"
               (async/>! sender-chan {:type :bye})
               (reset! running? false))
             ;; FIXME what else do we close down?
-            )))))
-  )
+            ))
 
-{:type #{:hello :bye :ack :close :forward :ack-forward}
- :guid "FFFFF"
- :body "asdsadsadsad"
- :target #{"root" "FFFFFF"}
-
- }
-
-;; (sc/defn serializer :- Serializer
-;;   "Create a  serializer/deserializer that uses Transit
-;; to serialize messages with specially attention to serializing
-;; and deserializing Channels. In the case of Channels, the
-;; serializer replaces the Channel with a GUID that goes over the wire.
-;; On deserialization, the GUID is looked up. If it's not found,
-;; then a proxy channel is created"
-;;   [opts]
-;;   (let [guid-to-info (atom {})
-;;         channel-to-info (atom {})]
-;;     (reify Serializer
-;;       (serialize [this item transport] "")
-;;       (deserialize [this string transport] {})
-;;       (find-channel [this guid] (get @guid-to-info guid))
-;;       )))
+        #+cljs
+        (TransportImpl.
+         remote-proxy
+         (fn []
+           (async/close! remote-proxy)
+           (do
+             (async/>! sender-chan {:type :bye})
+             (reset! running? false))
+           ;; FIXME what else do we close down?
+           )
+         )
+        ))))

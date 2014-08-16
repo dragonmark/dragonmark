@@ -118,9 +118,18 @@
 
     #+clj
     (do
-      (Thread/sleep 600)
+      (Thread/sleep 100)
       (is (= 1 @res))
       (is (= @res @b-info))
       )
+
+    #+cljs
+    (js/setTimeout
+     (fn []
+       (is (= 1 1))
+       ;; (is (= 1 @res))
+       ;; (is (= @res @b-info))
+       (t/done))
+     25)
 
     ))
