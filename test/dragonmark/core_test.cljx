@@ -1,5 +1,6 @@
 (ns dragonmark.core-test
-  (:require 
+  (:require
+   [cognitect.transit :as ct]
    [dragonmark.core :as dc]
    [schema.core :as sc]
    #+clj [clojure.core.async :as async :refer [go chan timeout <! close!]]
@@ -21,7 +22,7 @@
 
 (def my-error-atom (atom nil))
 
-(dc/gofor 
+(dc/gofor
  :let [b 44]
  [root (get-service my-root {:service 'root})]
  [added (add root {:service 'wombat2 :channel (chan) :public true})]
@@ -30,7 +31,7 @@
  (reset! my-atom b)
  :error (reset! my-atom (str "Got an error " &err " for frogs " &var)))
 
-(dc/gofor 
+(dc/gofor
  :let [b 44]
  [root (get-service-will-fail my-root {:service 'root})]
  [added (add root {:service 'wombat2 :channel (chan) :public true})]
@@ -41,9 +42,9 @@
 
 
 (deftest  ^:async go-for-test
-  
+
   #+clj (is (= (into #{} @my-atom) #{'wombat2 'root}))
-  
+
   #+cljs (js/setTimeout
           (fn []
             (is (= (into #{} @my-atom) #{'wombat2 'root}))
@@ -52,9 +53,9 @@
   )
 
 (deftest  ^:async go-for-test
-  
+
   #+clj (is (string? @my-error-atom))
-  
+
   #+cljs (js/setTimeout
           (fn []
             (is (string? @my-error-atom))
@@ -82,12 +83,73 @@
      (reset! atom-42 [x y])
      :error (reset! atom-42 &err))
 
-  #+clj (do
-          (Thread/sleep 100)
-          (is (= @atom-42 [42 43])))
+    #+clj (do
+            (Thread/sleep 100)
+            (is (= @atom-42 [42 43])))
 
-  #+cljs (js/setTimeout
-          (fn []
-            (is (= @atom-42 [42 43]))
-            (t/done))
-          25)))
+    #+cljs (js/setTimeout
+            (fn []
+              (is (= @atom-42 [42 43]))
+              (t/done))
+            25)))
+
+
+
+(deftest ^:async distributed-test
+  (let [a-chan (chan)
+        b-chan (chan)
+        a-info (atom 0)
+        b-info (atom 0)
+        a-root (dc/build-root-channel {"get" (fn [msg env] @a-info)
+                                       "inc" (fn [msg env] (swap! a-info inc))})
+        b-root (dc/build-root-channel {"get" (fn [msg env]
+                                               @b-info)
+                                       "inc" (fn [msg env]
+                                               (swap! b-info inc))})
+        a-transport (dc/build-transport a-root a-chan b-chan)
+        b-transport (dc/build-transport b-root b-chan a-chan)
+        b-root-proxy (dc/remote-root a-transport)
+        a-root-proxy (dc/remote-root b-transport)
+        res (atom nil)
+        done (atom false)
+
+        #+clj wait-obj #+clj ""]
+
+    (dc/gofor
+     [_ (inc b-root-proxy)]
+     [answer (get b-root-proxy)]
+     (do
+       (reset! res answer)
+       (reset! done true))
+     :error
+     (do
+       (reset! res &err)
+       (reset! done true)))
+
+    #+clj
+    (add-watch res :none (fn [_ _ _ _] (locking wait-obj (.notifyAll wait-obj))))
+
+    #+clj
+    (do
+      (locking wait-obj (.wait wait-obj))
+      (is (= 1 @res))
+      (is (= @res @b-info))
+      )
+
+    #+cljs
+    (let [count (atom 0)]
+      (letfn [(testit []
+                (if (not @done)
+                  (if (> 50000 (swap! count inc))
+                    (js/setTimeout testit 20)
+                    (do
+                      (is (= nil "Timeout"))
+                      (t/done)
+                      ))
+                  (do
+                    (is (= 1 1))
+                    (is (= 1 @res))
+                    (is (= @res @b-info))
+                    (t/done))
+                  ))] (testit)))
+    ))
