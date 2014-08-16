@@ -6,3 +6,4 @@ target
 out
 pom.xml
 doc
+*.asc
