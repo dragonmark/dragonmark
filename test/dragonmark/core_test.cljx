@@ -109,6 +109,9 @@
         b-root-proxy (dc/remote-root a-transport)
         a-root-proxy (dc/remote-root b-transport)
         res (atom nil)
+
+        #+clj wait-obj #+clj ""
+
         ]
     (dc/gofor
      [_ (inc b-root-proxy)]
@@ -117,8 +120,11 @@
      :error (reset! res &err))
 
     #+clj
+    (add-watch res :none (fn [_ _ _ _] (locking wait-obj (.notifyAll wait-obj))))
+
+    #+clj
     (do
-      (Thread/sleep 100)
+      (locking wait-obj (.wait wait-obj))
       (is (= 1 @res))
       (is (= @res @b-info))
       )
