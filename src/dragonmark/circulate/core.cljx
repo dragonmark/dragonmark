@@ -45,7 +45,7 @@
           "add" (if local?
                   (let [old (get-in @env [:services (:service message)])]
                     (when old (go (async/>! old {:_cmd "removed_from_root"})))
-                    (swap! env update-in [:services (:service message)]
+                    (swap! env update-in [:services]
                            assoc (:service message)
                            {:channel (:channel message)
                             :public (-> message :public boolean)})

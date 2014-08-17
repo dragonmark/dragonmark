@@ -80,6 +80,8 @@
      :let [service (dc/build-service)]
      [x (get-42 service)]
      [y (plus-one service {:x x})]
+     [docs (_commands service)]
+     :let [_ #+clj (println "Commands:\n" docs) #+cljs nil]
      (reset! atom-42 [x y])
      :error (reset! atom-42 &err))
 
@@ -106,6 +108,7 @@
                                                @b-info)
                                        "inc" (fn [msg env]
                                                (swap! b-info inc))})
+        service-for-b (dc/build-service)
         a-transport (dc/build-transport a-root a-chan b-chan)
         b-transport (dc/build-transport b-root b-chan a-chan)
         b-root-proxy (dc/remote-root a-transport)
@@ -116,10 +119,16 @@
         #+clj wait-obj #+clj ""]
 
     (dc/gofor
+     [_ (add b-root {:service '42
+                     :public true
+                     :channel service-for-b})]
      [_ (inc b-root-proxy)]
-     [answer (get b-root-proxy)]
+     [answer (get b-root-proxy)
+      service-list (list b-root-proxy)
+      service-42 (get-service b-root-proxy {:service '42})]
+     [answer2 (get-42 service-42)]
      (do
-       (reset! res answer)
+       (reset! res [answer (into #{} service-list) answer2])
        (reset! done true))
      :error
      (do
@@ -132,8 +141,8 @@
     #+clj
     (do
       (locking wait-obj (.wait wait-obj))
-      (is (= 1 @res))
-      (is (= @res @b-info))
+      (is (= [1 #{'42 'root} 42] @res))
+      ;; (is (= (first @res) @b-info))
       )
 
     #+cljs
@@ -147,9 +156,8 @@
                       (t/done)
                       ))
                   (do
-                    (is (= 1 1))
-                    (is (= 1 @res))
-                    (is (= @res @b-info))
+                    (is (= [1 #{'42 'root} 42] @res))
+                    (is (= (first @res) @b-info))
                     (t/done))
                   ))] (testit)))
     ))
