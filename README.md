@@ -15,6 +15,8 @@ to write a local or distributed app.
 
 ## Basic info
 
+[![Clojars Project](http://clojars.org/dragonmark/circulate/latest-version.svg)](http://clojars.org/dragonmark/circulate)
+
 The current build status:
 <a href="https://travis-ci.org/dragonmark/dragonmark">
 ![Build Status](https://travis-ci.org/dragonmark/dragonmark.svg?branch=develop)</a>
