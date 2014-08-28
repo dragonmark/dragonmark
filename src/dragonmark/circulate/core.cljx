@@ -5,6 +5,7 @@
    [dragonmark.util.core :as du]
    [schema.core :as sc]
    [cognitect.transit :as t]
+   #+clj [cljs.analyzer :as cljs-analyzer]
    #+clj [clojure.core.async :as async :refer [go chan timeout]]
    #+cljs [cljs.core.async :as async :refer [chan timeout]]
    )

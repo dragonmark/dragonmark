@@ -1,4 +1,4 @@
-(defproject dragonmark/circulate "0.1.1"
+(defproject dragonmark/circulate "0.1.2"
   :description "Distributed CSP/core.async"
   :url "https://github.com/dragonmark/dragonmark"
   :license {:name "Eclipse Public License"
