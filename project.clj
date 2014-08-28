@@ -1,4 +1,4 @@
-(defproject dragonmark/circulate "0.1.2"
+(defproject dragonmark/circulate "0.2.0"
   :description "Distributed CSP/core.async"
   :url "https://github.com/dragonmark/dragonmark"
   :license {:name "Eclipse Public License"
@@ -6,10 +6,10 @@
   :dependencies [[org.clojure/clojure "1.6.0"]
                  [com.cognitect/transit-clj "0.8.247"  :exclusions [org.clojure/clojure]]
                  [dragonmark/util "0.1.1"  :exclusions [org.clojure/clojure]]
-                 [com.cognitect/transit-cljs "0.8.182"  :exclusions [org.clojure/clojure]]
+                 [com.cognitect/transit-cljs "0.8.184"  :exclusions [org.clojure/clojure]]
                  [prismatic/schema "0.2.4"  :exclusions [org.clojure/clojure]]
-                 [org.clojure/clojurescript "0.0-2268"]
-                 [org.clojure/core.async "0.1.319.0-6b1aca-alpha"
+                 [org.clojure/clojurescript "0.0-2322"]
+                 [org.clojure/core.async "0.1.338.0-5c5012-alpha"
                   :exclusions [org.clojure/clojure]]
                  ]
 

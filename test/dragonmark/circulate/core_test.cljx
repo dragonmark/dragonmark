@@ -118,6 +118,25 @@
 
         #+clj wait-obj #+clj ""]
 
+    (let [the-chan (chan)]
+      (is (= {:foo the-chan}
+             {:foo  (dc/deserialize b-transport
+                                    (dc/serialize
+                                     b-transport the-chan))}
+             ))
+      (is (= 1  (-> (dc/proxy-info b-transport)
+                    first
+                    deref
+                    count)))
+
+      (async/close! the-chan)
+
+      (is (= 0 (-> (dc/proxy-info b-transport)
+                   first
+                   deref
+                   count)))
+      )
+
     (dc/gofor
      [_ (add b-root {:service '42
                      :public true
@@ -141,15 +160,28 @@
     #+clj
     (do
       (locking wait-obj (.wait wait-obj))
+
+      (Thread/sleep 50)
+
       (is (= [1 #{'42 'root} 42] @res))
+
+      (is (= 1 (-> (dc/proxy-info b-transport)
+                   first
+                   deref
+                   count)))
+      (is (= 1 (-> (dc/proxy-info a-transport)
+                   first
+                   deref
+                   count)))
+
       ;; (is (= (first @res) @b-info))
       )
 
     #+cljs
-    (let [count (atom 0)]
+    (let [the-count (atom 0)]
       (letfn [(testit []
                 (if (not @done)
-                  (if (> 50000 (swap! count inc))
+                  (if (> 50000 (swap! the-count inc))
                     (js/setTimeout testit 20)
                     (do
                       (is (= nil "Timeout"))
@@ -158,6 +190,16 @@
                   (do
                     (is (= [1 #{'42 'root} 42] @res))
                     (is (= (first @res) @b-info))
+
+                    (is (= 1 (-> (dc/proxy-info b-transport)
+                                 first
+                                 deref
+                                 count)))
+
+                    (is (= 1 (-> (dc/proxy-info a-transport)
+                                 first
+                                 deref
+                                 count)))
                     (t/done))
                   ))] (testit)))
     ))

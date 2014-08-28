@@ -8,6 +8,12 @@
    #+clj [cljs.analyzer :as cljs-analyzer]
    #+clj [clojure.core.async :as async :refer [go chan timeout]]
    #+cljs [cljs.core.async :as async :refer [chan timeout]]
+
+   #+clj [clojure.core.async.impl.protocols :as impl]
+   #+clj [clojure.core.async.impl.channels :as chans]
+
+   #+cljs [cljs.core.async.impl.protocols :as impl]
+   #+cljs [cljs.core.async.impl.channels :as chans]
    )
 
   #+clj (:import
@@ -31,9 +37,14 @@
    (:error value)
    {:answer value}))
 
+(defprotocol EnvInfo
+  "Carries the environment around"
+  (env-info [_] "Gets the environment atom")
+  (locate-service [_ service] "locates the service in the delegation chain"))
+
 (defn- process
   "Processes a message sent to the root channel"
-  [message env]
+  [channel message env]
   (let [return (:_return message)
         command (:_cmd message)
         local? (-> message meta :local boolean)
@@ -64,26 +75,75 @@
 
           "get-service"
           (let [result (-> @env :services (get (:service message)))
-                result (if (or (not local?)
-                               (:public result))
+                result (if (and result
+                                (or (not local?)
+                                    (:public result)))
                          (:channel result)
                          nil)]
-            (if result {:answer result} {:error
-                                         (str "Service " (:service message)
-                                              " not found")})
-            )
+            (if result
+              {:answer result}
+              {:error
+               (str "Service " (:service message)
+                    " not found")}))
+
+          "locate-service"
+          (let [result (locate-service channel (:service message))
+                result (if (and result
+                                (or (not local?)
+                                    (:public result)))
+                         (:channel result)
+                         nil)]
+            (if result
+              {:answer result}
+              {:error
+               (str "Service " (:service message)
+                    " not found")}))
+
+          "name"
+          {:answer (:name @env)}
+
+          "add-handler"
+          (if local?
+            ((swap!
+              env
+              assoc-in [:commands (:command message)] (:function message))
+             {:answer true})
+            {:error "Cannot add handler without a :local in the meta of the message"})
+
+          "remove-handler"
+          (if local?
+            ((swap!
+              env
+              update-in [:commands] dissoc (:command message))
+             {:answer true})
+            {:error "Cannot remove handler without a :local in the meta of the message"})
+
+          "delegate"
+          {:answer (:delegate @env)}
 
           (or
+           ;; try local custom functions
            (some-> (get (:commands @env) command)
                    (apply [message env])
                    error-or-answer)
+
+           ;; or send it to the delegate
+           (if-let [delegate  (:delegate @env)]
+            (do
+              (async/put! delegate message)
+              i-got-it)
+            nil
+            )
+
            {:error
             (str "Unabled to process command: "
                  command)}))]
     (when (and answer
                return
-               (not (= answer i-got-it))) (go (async/>! return answer)))
-    ))
+               (not (= answer i-got-it))) (go (async/>! return answer)))))
+
+
+
 
 (defn build-root-channel
   "Builds a root channel (usually put in env-root,
@@ -93,23 +153,57 @@
   String is the name of the command and the function is a two
   parameter function (message and env) that returns a value to
   send to the answer channel or :dragonmark.circulate:i_got_it"
-  [commands]
-  (let [c (chan 5)
-        env (atom {:services
-                   {'root {:channel c
-                           :public true}}
-                   :commands commands})
-        ]
-    (go
-      (loop []
-        (let [message (async/<! c)]
-          (if (nil? message) nil ;; nil... closed channel... bye
-              (do
-                (process message env)
-                (recur)))
-          )
-        ))
-    c))
+  ([] (build-root-channel {} (du/next-guid) nil))
+  ([commands] (build-root-channel commands (du/next-guid) nil))
+  ([commands name delegate]
+     (let [c (chan 5)
+           env (atom {:services
+                      {'root {:channel c
+                              :public true}}
+
+                      :name name
+
+                      :commands commands
+
+                      :delegate delegate})
+
+           chan+env
+           (reify
+             EnvInfo
+             (env-info [_] env)
+             (locate-service [_ service]
+               (or
+                (-> @env :services (get service))
+                (if-let [delegate (:delegate env)]
+                  (and
+                   (satisfies? EnvInfo delegate)
+                   (locate-service delegate service)))))
+
+             chans/MMC
+             (cleanup [_] (chans/cleanup c))
+             (abort [_] (chans/abort c))
+
+             impl/WritePort
+             (put! [this val handler]
+               (impl/put! c val handler))
+
+             impl/ReadPort
+             (take! [port fn1-handler] (impl/take! c fn1-handler))
+
+             impl/Channel
+             (close! [chan] (impl/close! c))
+             (closed? [chan] (impl/closed? c))
+             )]
+       (go
+         (loop []
+           (let [message (async/<! c)]
+             (if (nil? message) nil ;; nil... closed channel... bye
+                 (do
+                   (process chan+env message env)
+                   (recur))))))
+
+       chan+env
+       )))
 
 (defn- index-of
   "find the integer into of the value in the collection"
@@ -142,7 +236,7 @@
         ret (mapv (fn [x] nil) chans)
         close-and-send (fn [result]
                          (go (async/>! result-chan result))
-                         (doall (map async/close! (rest  alt-on)))
+                         (doall (map async/close! (rest alt-on)))
                          )]
     (go
       (loop [ret ret cnt 0]
@@ -357,28 +451,23 @@
                            ]
                        ~(wrap-in-thread
                          &env
-                         `(let [res# (if ~the-func
-                                       (try
-                                         (let [result# (~wrapper ~the-func ~it)]
-                                           (if (-> result# meta :error) result#
-                                               {:answer result#}))
-                                         (catch ~(if cljs-macro
-                                                   `js/Object
-                                                   `Exception)
-                                             excp# {:error excp#}))
-                                       {:error (str "Command " ~cmd
-                                                    " not found")})
-                                ]
+                         `(let [res#
+                                (if ~the-func
+                                  (try
+                                    (let [result# (~wrapper ~the-func ~it)]
+                                      (if (-> result# meta :error) result#
+                                          {:answer result#}))
+                                    (catch ~(if cljs-macro
+                                              `js/Object
+                                              `Exception)
+                                        excp# {:error excp#}))
+                                  {:error (str "Command " ~cmd
+                                               " not found")})]
                             (when ~answer
                               (~go (~>! ~answer res#)))))
-                       (recur (~<! c#))
-                       )
-                     )))
-             c#
-             )
-          ]
-      ret)
-    ))
+                       (recur (~<! c#))))))
+             c#)]
+      ret)))
 
 (defprotocol Transport
   "A transport to another address space"
@@ -388,7 +477,12 @@
   (close!
     ;;"Close the transport"
     [this])
-  )
+
+  (proxy-info [this])
+
+  (serialize [this info])
+
+  (deserialize [this info]))
 
 #+clj
 (defn- chan-closed? "Is the channel closed?" [chan] (some-> (.-closed chan) deref))
@@ -402,7 +496,8 @@
   [chan func]
   (if (chan-closed? chan)
     (func)
-    (add-watch (.-closed chan) :none (fn [k r os ns] (func))))
+    (add-watch (.-closed chan) :none (fn [k r os ns]
+                                       (func))))
   )
 
 #+cljs
@@ -411,21 +506,34 @@
   [chan func]
   (if (chan-closed? chan)
     (func)
-    (comment
-      (.watch chan "closed"
-              (fn [id old new]
-                (.log js/console "Closing")
-                (func))))
-    ))
+    (let [cur-value (atom false)
+          it #js
+          {"configurable" true
+           "enumerable" true
 
-#+cljs
-(deftype TransportImpl [remote-proxy close-func]
-  Transport
-  (remote-root [this] remote-proxy)
-  (close! [this] (close-func)
-    ;; FIXME what else do we close down?
-    )
-  )
+           "get" (fn [] @cur-value)
+           "set" (fn [nv]
+                   (reset! cur-value nv)
+                   (when nv
+                     (func))
+                   nv
+                   )
+           }]
+      (.defineProperty
+       js/Object
+       chan
+       "closed"
+       it
+       ))))
+
+;; #+cljs
+;; (deftype TransportImpl [remote-proxy close-func]
+;;   Transport
+;;   (remote-root [this] remote-proxy)
+;;   (close! [this] (close-func)
+;;     ;; FIXME what else do we close down?
+;;     )
+;;   )
 
 #+cljs
 (deftype ChannelHandler [write-func]
@@ -537,7 +645,11 @@
                             (t/write (t/writer bos :json
                                                {:handlers
                                                 {ManyToManyChannel
-                                                 write-handler}} )
+                                                 write-handler
+                                                 impl/Channel
+                                                 write-handler}
+                                                ;; {}
+                                                } )
                                      a-form)
                             (.toString bos "UTF-8")))
 
@@ -558,7 +670,10 @@
                              :json
                              {:handlers
                               {cljs.core.async.impl.channels/ManyToManyChannel
-                               write-handler}}) a-form)]
+                               write-handler
+                               impl/Channel
+                               write-handler
+                               }}) a-form)]
                ret
                ))
 
@@ -600,9 +715,14 @@
                   ))
               my-chan)
             ]
-        (letfn [(do-guid-closed [guid]
-                  (go (async/>! sender-chan {:type :close :target guid}))
-                  )
+        (letfn [(do-guid-closed
+                  [guid]
+                  (async/put! sender-chan {:type :close :target guid})
+                  (if-let [info (get @guid-to-chan guid)]
+                    (let [{:keys [chan local proxy]} info]
+                      (swap! guid-to-chan dissoc guid)
+                      (swap! chan-to-guid dissoc chan))))
+
                 (do-send-message [target message ack-chan]
                   (let [guid (du/next-guid)]
                     (when ack-chan
@@ -687,7 +807,8 @@
                     )
                   (if @running? (recur) nil)))
               )))
-        #+clj
+
+        ;;#+clj
         (reify Transport
           (remote-root [this] remote-proxy)
           (close! [this]
@@ -697,17 +818,20 @@
               (async/>! sender-chan {:type :bye})
               (reset! running? false))
             ;; FIXME what else do we close down?
-            ))
+            )
+          (proxy-info [this] [chan-to-guid guid-to-chan])
+          (serialize [this form] (do-serialize form))
+          (deserialize [this string] (do-deserialize string))
+          )
 
-        #+cljs
-        (TransportImpl.
-         remote-proxy
-         (fn []
-           (async/close! remote-proxy)
-           (do
-             (async/>! sender-chan {:type :bye})
-             (reset! running? false))
-           ;; FIXME what else do we close down?
-           )
-         )
+        ;; #+cljs
+        ;; (TransportImpl.
+        ;;  remote-proxy
+        ;;  (fn []
+        ;;    (async/close! remote-proxy)
+        ;;    (do
+        ;;      (async/>! sender-chan {:type :bye})
+        ;;      (reset! running? false))
+        ;;    ;; FIXME what else do we close down?
+        ;;    ))
         ))))
