@@ -18,6 +18,7 @@
 
   #+clj (:import
          [clojure.core.async.impl.channels ManyToManyChannel]
+         [clojure.core.async.impl.protocols Channel]
          [java.io Writer])
   )
 
@@ -194,6 +195,10 @@
              (close! [chan] (impl/close! c))
              (closed? [chan] (impl/closed? c))
              )]
+
+       ;; make sure Transit can serialize this in ClojureScript
+       #+cljs (aset chan+env "transitTag" "dragonmark-channel")
+
        (go
          (loop []
            (let [message (async/<! c)]
@@ -644,9 +649,9 @@
                           (let [bos (java.io.ByteArrayOutputStream.)]
                             (t/write (t/writer bos :json
                                                {:handlers
-                                                {ManyToManyChannel
-                                                 write-handler
-                                                 impl/Channel
+                                                {;;ManyToManyChannel
+                                                 ;;write-handler
+                                                 Channel
                                                  write-handler}
                                                 ;; {}
                                                 } )
@@ -671,7 +676,7 @@
                              {:handlers
                               {cljs.core.async.impl.channels/ManyToManyChannel
                                write-handler
-                               impl/Channel
+                               "dragonmark-channel"
                                write-handler
                                }}) a-form)]
                ret
@@ -808,7 +813,6 @@
                   (if @running? (recur) nil)))
               )))
 
-        ;;#+clj
         (reify Transport
           (remote-root [this] remote-proxy)
           (close! [this]
@@ -822,16 +826,4 @@
           (proxy-info [this] [chan-to-guid guid-to-chan])
           (serialize [this form] (do-serialize form))
           (deserialize [this string] (do-deserialize string))
-          )
-
-        ;; #+cljs
-        ;; (TransportImpl.
-        ;;  remote-proxy
-        ;;  (fn []
-        ;;    (async/close! remote-proxy)
-        ;;    (do
-        ;;      (async/>! sender-chan {:type :bye})
-        ;;      (reset! running? false))
-        ;;    ;; FIXME what else do we close down?
-        ;;    ))
-        ))))
+          )))))
