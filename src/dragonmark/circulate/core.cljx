@@ -173,12 +173,16 @@
              EnvInfo
              (env-info [_] env)
              (locate-service [_ service]
-               (or
-                (-> @env :services (get service))
-                (if-let [delegate (:delegate env)]
-                  (and
-                   (satisfies? EnvInfo delegate)
-                   (locate-service delegate service)))))
+               (let [ret
+                     (or
+                      (-> @env :services (get service))
+                      (if-let [delegate (:delegate @env)]
+                        (do
+                          (and
+                           (instance? dragonmark.circulate.core.EnvInfo delegate)
+                           (locate-service delegate service)))))]
+                 ret
+                 ))
 
              chans/MMC
              (cleanup [_] (chans/cleanup c))
