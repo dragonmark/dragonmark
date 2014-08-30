@@ -823,8 +823,16 @@
 
             (async/close! remote-proxy)
             (do
-              (async/>! sender-chan {:type :bye})
+              (async/put! sender-chan {:type :bye})
               (reset! running? false))
+              (dorun
+               (as-> @guid-to-chan
+                     info
+                     (vals info)
+                     (filter :proxy info)
+                     (map :chan info)
+                     (map async/close! info)
+                     ))
             ;; FIXME what else do we close down?
             )
           (proxy-info [this] [chan-to-guid guid-to-chan])
