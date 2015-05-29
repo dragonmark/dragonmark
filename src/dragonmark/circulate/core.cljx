@@ -181,7 +181,7 @@
                    (locate-service delegate service)))))
 
              chans/MMC
-             (cleanup [_] (chans/cleanup c))
+             ;; (cleanup [_] (chans/cleanup c))
              (abort [_] (chans/abort c))
 
              impl/WritePort
