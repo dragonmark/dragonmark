@@ -173,12 +173,16 @@
              EnvInfo
              (env-info [_] env)
              (locate-service [_ service]
-               (or
-                (-> @env :services (get service))
-                (if-let [delegate (:delegate env)]
-                  (and
-                   (satisfies? EnvInfo delegate)
-                   (locate-service delegate service)))))
+               (let [ret
+                     (or
+                      (-> @env :services (get service))
+                      (if-let [delegate (:delegate @env)]
+                        (do
+                          (and
+                           (instance? dragonmark.circulate.core.EnvInfo delegate)
+                           (locate-service delegate service)))))]
+                 ret
+                 ))
 
              chans/MMC
              ;; (cleanup [_] (chans/cleanup c))
@@ -819,8 +823,16 @@
 
             (async/close! remote-proxy)
             (do
-              (async/>! sender-chan {:type :bye})
+              (async/put! sender-chan {:type :bye})
               (reset! running? false))
+              (dorun
+               (as-> @guid-to-chan
+                     info
+                     (vals info)
+                     (filter :proxy info)
+                     (map :chan info)
+                     (map async/close! info)
+                     ))
             ;; FIXME what else do we close down?
             )
           (proxy-info [this] [chan-to-guid guid-to-chan])
